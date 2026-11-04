@@ -1,0 +1,411 @@
+import { auth, clerkClient } from "@clerk/nextjs/server";
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { CODING_PROBLEMS } from "@/data/problems";
+import { getVivaStarterCode } from "@/lib/interview/starter-code";
+
+/**
+ * POST /api/interviews
+ * Creates a new interview session with a randomly-selected problem
+ * matching the requested difficulty.
+ */
+export async function POST(req: Request) {
+  try {
+    const { userId: clerkId } = await auth();
+
+    if (!clerkId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const {
+      language,
+      difficulty,
+      style = "standard",
+      duration,
+      jobRoleId,
+      personalizeWithProfile = false,
+      provider = "hosted",
+      projectId,
+    } = body;
+
+    // Validate inputs
+    const validLanguages = ["javascript", "typescript", "python", "java", "cpp", "go"];
+    const validDifficulties = ["easy", "medium", "hard"];
+    const validStyles = ["standard", "product", "startup", "service"];
+    const validDurations = [10, 15, 20, 30, 45];
+    const validProviders = ["hosted", "ollama"];
+
+    if (!validLanguages.includes(language)) {
+      return NextResponse.json({ error: "Invalid language" }, { status: 400 });
+    }
+    if (!validDifficulties.includes(difficulty)) {
+      return NextResponse.json({ error: "Invalid difficulty" }, { status: 400 });
+    }
+    if (!validStyles.includes(style)) {
+      return NextResponse.json({ error: "Invalid style" }, { status: 400 });
+    }
+    if (!validDurations.includes(duration)) {
+      return NextResponse.json({ error: "Invalid duration" }, { status: 400 });
+    }
+    if (!validProviders.includes(provider)) {
+      return NextResponse.json({ error: "Invalid provider" }, { status: 400 });
+    }
+
+    // Find or auto-sync the user in the database
+    let user = await prisma.user.findUnique({
+      where: { clerkId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      try {
+        const clerk = await clerkClient();
+        const cu = await clerk.users.getUser(clerkId);
+        const email = cu.emailAddresses[0]?.emailAddress || `${clerkId}@user.com`;
+        const name = `${cu.firstName || ""} ${cu.lastName || ""}`.trim() || "Candidate";
+        user = await prisma.user.upsert({
+          where: { email },
+          update: { clerkId, name },
+          create: { clerkId, email, name },
+          select: { id: true },
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: "User account could not be synchronized." },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Check if the user has an active Student Profile (Module 1 Intake)
+    const studentProfile = await prisma.studentProfile.findUnique({
+      where: { userId: user.id },
+      include: {
+        projects: { orderBy: { order: "asc" } },
+        achievements: { orderBy: { createdAt: "desc" } },
+      },
+    });
+
+    let problemTitle: string;
+    let problemDescription: string;
+    let starterCode: string;
+
+    const isBehavioral = style === "service";
+
+    if (isBehavioral) {
+      problemTitle = "HR & Situational Fit: Leadership & Behavioral Competency";
+      problemDescription = `# HR & Behavioral Competency Assessment
+- **Evaluation Track**: Behavioral & Situational Judgment (STAR Method)
+- **Focus Areas**: Teamwork, Conflict Resolution, Ownership, Deadline Pressure & Culture Fit
+- **Format**: Live spoken dialogue with Senior Hiring Manager
+
+### Evaluation Rubric:
+1. **Situation & Task**: Clarity in setting context and defining the challenge.
+2. **Action & Initiative**: Specific personal contributions, leadership, and proactive problem-solving.
+3. **Result & Reflection**: Quantifiable outcome, lessons learned, and self-awareness.
+4. **Communication & Maturity**: Structured articulation, empathy, and professional demeanor.
+
+### Instructions:
+- Speak naturally and conversationally into your microphone.
+- Structure your stories using the **STAR Method** (Situation, Task, Action, Result).
+- Share genuine examples from your college projects, internships, hackathons, or team collaborations.`;
+
+      starterCode = `// HR & Behavioral Competency Interview
+// No coding challenge required for this round.
+// Use this scratchpad freely to take notes or outline your STAR responses.
+`;
+    } else if (studentProfile && (personalizeWithProfile || (studentProfile.projects && studentProfile.projects.length > 0))) {
+      const roleName = studentProfile.targetRole || "Full Stack Developer";
+      const primaryProj =
+        (projectId && studentProfile.projects?.find((p) => p.id === projectId)) ||
+        studentProfile.projects?.[0];
+      const otherProjects =
+        studentProfile.projects?.filter((p) => p.id !== primaryProj?.id) || [];
+      const projectTitle = primaryProj?.title?.trim();
+      const liveUrl = primaryProj?.liveUrl?.trim();
+      const repoUrl = primaryProj?.repoUrl?.trim();
+      const stackList = Array.isArray(primaryProj?.techStack) && primaryProj.techStack.length > 0
+        ? primaryProj.techStack.join(", ")
+        : Array.isArray(studentProfile.skills) && studentProfile.skills.length > 0
+          ? (studentProfile.skills as string[]).slice(0, 5).join(", ")
+          : "";
+
+      problemTitle = projectTitle
+        ? `${roleName} Placement Viva: ${projectTitle}`
+        : `${roleName} Placement Viva`;
+
+      const projectSections: string[] = [];
+      if (projectTitle) {
+        projectSections.push(`## Featured Project in Scope: ${projectTitle}`);
+      }
+      if (liveUrl) {
+        projectSections.push(`- **Live Deployment**: ${liveUrl}`);
+      }
+      if (repoUrl) {
+        projectSections.push(`- **Source Code Repository**: ${repoUrl}`);
+      }
+      if (stackList) {
+        projectSections.push(`- **Verified Tech Stack**: ${stackList}`);
+      }
+      if (primaryProj?.description) {
+        projectSections.push(`- **Project Architecture & Summary**: ${primaryProj.description}`);
+      }
+
+      if (otherProjects.length > 0) {
+        projectSections.push(`\n### Candidate's Broader Portfolio (${otherProjects.length} Other Projects Available for Comparison):`);
+        otherProjects.forEach((p, idx) => {
+          const pStack = Array.isArray(p.techStack) && p.techStack.length > 0 ? p.techStack.join(", ") : "Various";
+          projectSections.push(`${idx + 1}. **${p.title}** (Tech: ${pStack})${p.description ? ` — ${p.description}` : ""}`);
+        });
+      }
+
+      problemDescription = `# ${roleName} Placement Viva Dossier
+${projectSections.length > 0 ? projectSections.join("\n") + "\n\n---\n" : ""}
+### Interview Objectives & Defense Rubric (15–20 Mins):
+1. **System Architecture & Data Flow**:
+   - Component hierarchy, state hydration, and client-server boundaries.
+   - Database schema design, document relationships, and indexing strategies.
+2. **API Design & Network Latency**:
+   - RESTful API endpoints, request/response lifecycle, and middleware architecture.
+   - Error boundary handling, response validation, and CORS hygiene.
+3. **Engineering Trade-offs & Production Scaling**:
+   - Caching strategies, handling stream buffering, and database connection pooling.
+   - Code modularity, clean architecture, and technical debt management.
+4. **Behavioral & Hackathon Ownership**:
+   - STAR-method evaluation on handling production bugs, deadline pressure, and execution.
+
+---
+
+### Instructions for Candidate:
+- The AI interviewer will converse with you in real time via speech or text.
+- Use the code editor on the right if the interviewer asks you to draft an API route, middleware, or optimize a data structure.`;
+
+      const projectRef = projectTitle || "Application";
+      starterCode = getVivaStarterCode(language, roleName, projectRef, stackList || "Core Stack & Architecture");
+    } else if (style !== "dsa") {
+      // Placement Viva anchored to target role and tech stack for candidates who haven't uploaded resume yet
+      const isBehavioral = style === "service";
+      let roleRecord = null;
+
+      if (jobRoleId) {
+        roleRecord = await prisma.jobRole.findUnique({ where: { id: jobRoleId } });
+      }
+      if (!roleRecord) {
+        if (isBehavioral) {
+          roleRecord = await prisma.jobRole.findFirst({
+            where: { title: { contains: "HR", mode: "insensitive" } },
+          });
+        } else {
+          roleRecord =
+            (await prisma.jobRole.findFirst({
+              where: {
+                isDefault: true,
+                NOT: { title: { contains: "HR", mode: "insensitive" } },
+              },
+            })) ||
+            (await prisma.jobRole.findFirst({
+              where: {
+                isActive: true,
+                NOT: { title: { contains: "HR", mode: "insensitive" } },
+              },
+            }));
+        }
+      }
+
+      const roleName =
+        studentProfile?.targetRole ||
+        (isBehavioral ? "HR & Behavioral Fit" : roleRecord?.title || "Full Stack Developer");
+
+      const stackSkills =
+        Array.isArray(studentProfile?.skills) && studentProfile.skills.length > 0
+          ? (studentProfile.skills as string[]).slice(0, 6).join(", ")
+          : roleRecord?.targetSkills || (isBehavioral ? "STAR Method, Teamwork, Ownership, Leadership" : "React, Next.js, Node.js, TypeScript, REST APIs, Databases");
+
+      problemTitle = isBehavioral
+        ? "HR & Situational Fit Viva: Leadership & Behavioral Competency"
+        : `${roleName} Placement Viva: Core Tech Stack & Architecture`;
+
+      problemDescription = `# ${problemTitle}
+- **Evaluation Track**: ${isBehavioral ? "Behavioral & HR Competency (STAR Method)" : "Placement Technical Viva"}
+- **Target Focus**: ${stackSkills}
+- **Experience Level**: Campus Placement / Fresher
+
+---
+
+### Interview Objectives & Defense Rubric (15–20 Mins):
+1. **Core Language & Framework Fundamentals**:
+   - Component rendering, state flow, asynchronous lifecycle, and error boundaries.
+2. **System Architecture & API Design**:
+   - RESTful API endpoints, request validation, database query optimization, and CORS/auth hygiene.
+3. **Engineering Trade-offs & Production Scaling**:
+   - Caching strategies, handling high concurrency, indexing strategies, and network latency.
+4. **Behavioral & Engineering Ownership**:
+   - Handling production bugs, learning new tech stacks quickly, and team collaboration.
+
+---
+
+### Instructions for Candidate:
+- The AI interviewer will converse with you in real time via voice or chat.
+- Speak naturally or type your responses.
+- Use the code editor on the right if the interviewer asks you to draft an API route, middleware, or optimize a data structure.
+> *Tip: To personalize future vivas around your exact personal projects and GitHub repos, upload your resume in the **Profile** tab!*`;
+
+      starterCode = getVivaStarterCode(language, roleName, "System Architecture", stackSkills);
+    } else {
+      // Fallback to random coding problem ONLY if user explicitly requested DSA algorithmic track
+      let matchingProblems = CODING_PROBLEMS.filter(
+        (p) => p.difficulty === difficulty
+      );
+
+      if (matchingProblems.length === 0) {
+        matchingProblems = CODING_PROBLEMS;
+      }
+
+      // Avoid repeating problems the user has already seen
+      const pastInterviews = await prisma.interview.findMany({
+        where: { userId: user.id },
+        select: { problemTitle: true },
+      });
+      
+      const pastTitles = new Set(pastInterviews.map((i) => i.problemTitle));
+      const newProblems = matchingProblems.filter(p => !pastTitles.has(p.title));
+      
+      if (newProblems.length > 0) {
+        matchingProblems = newProblems;
+      }
+
+      const problem =
+        matchingProblems[Math.floor(Math.random() * matchingProblems.length)];
+
+      const lang = language as keyof typeof problem.starterCode;
+      starterCode =
+        problem.starterCode[lang] ??
+        (language === "typescript" ? problem.starterCode["javascript"] : "") ??
+        "";
+
+      problemTitle = problem.title;
+      problemDescription = [
+        problem.description,
+        "",
+        ...problem.examples.map(
+          (ex, i) =>
+            `Example ${i + 1}:\nInput: ${ex.input}\nOutput: ${ex.output}${ex.explanation ? `\nExplanation: ${ex.explanation}` : ""}`
+        ),
+        "",
+        "Constraints:",
+        ...problem.constraints.map((c) => `  - ${c}`),
+      ].join("\n");
+    }
+
+    // Create the interview record (do not attach legacy seed jobRoleId if personalized viva)
+    const interview = await prisma.interview.create({
+      data: {
+        userId: user.id,
+        jobRoleId: studentProfile ? null : (jobRoleId || null),
+        language,
+        difficulty,
+        style,
+        duration,
+        status: "setup",
+        problemTitle,
+        problemDescription,
+        code: starterCode,
+      },
+    });
+
+    return NextResponse.json({ interview }, { status: 201 });
+  } catch (error) {
+    console.error("Interview creation error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET /api/interviews
+ * Returns the current user's interviews (most recent first).
+ */
+export async function GET(req: Request) {
+  try {
+    const { userId: clerkId } = await auth();
+
+    if (!clerkId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { clerkId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return NextResponse.json({
+        interviews: [],
+        pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasMore: false },
+      });
+    }
+
+    const url = new URL(req.url);
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+    const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "20", 10)));
+    const skip = (page - 1) * limit;
+
+    const [interviews, total] = await Promise.all([
+      prisma.interview.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          jobRoleId: true,
+          jobRole: {
+            select: {
+              title: true,
+              level: true,
+              mode: true,
+            },
+          },
+          language: true,
+          difficulty: true,
+          duration: true,
+          status: true,
+          problemTitle: true,
+          startedAt: true,
+          endedAt: true,
+          createdAt: true,
+          report: {
+            select: { overallScore: true },
+          },
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.interview.count({
+        where: { userId: user.id },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+    const hasMore = page < totalPages;
+
+    return NextResponse.json({
+      interviews,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasMore,
+      },
+    });
+  } catch (error: unknown) {
+    console.error("Interview fetch error:", error);
+    const message = error instanceof Error ? error.message : "Internal server error";
+    return NextResponse.json(
+      { error: message },
+      { status: 500 }
+    );
+  }
+}
