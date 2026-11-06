@@ -9,8 +9,6 @@ export interface InterviewPilotLogoProps {
   withBadge?: boolean;
 }
 
-export type MiraiLogoProps = InterviewPilotLogoProps;
-
 /**
  * InterviewPilot Brand Mark
  */
@@ -153,5 +151,3 @@ export function InterviewPilotLogo({
     </div>
   );
 }
-
-export const MiraiLogo = InterviewPilotLogo;

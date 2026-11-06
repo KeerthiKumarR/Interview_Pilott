@@ -78,13 +78,23 @@ export function useFaceDetection({
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
+      } catch {}
+      videoRef.current = null;
+    }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach((t) => {
+        try {
+          t.stop();
+        } catch {}
+      });
       streamRef.current = null;
     }
     setStream(null);
     setIsCameraReady(false);
-    videoRef.current = null;
     outOfFrameStartTimeRef.current = null;
   }, []);
 

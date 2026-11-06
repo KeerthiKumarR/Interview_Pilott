@@ -3,6 +3,7 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
 import { readSSEStream } from "@/lib/sse-utils";
+import { cleanInterviewChatText } from "@/lib/utils";
 
 interface UseChatStreamOptions {
   
@@ -216,6 +217,7 @@ export function useChatStream(options: UseChatStreamOptions) {
               currentQuestionTitle: store.currentQuestion?.title || null,
               currentQuestionPrompt: store.currentQuestion?.promptText || null,
               currentCategory: store.activeCategory,
+              spokenLanguage: store.sttLanguage || "en-IN",
             }),
           }
         );
@@ -253,8 +255,14 @@ export function useChatStream(options: UseChatStreamOptions) {
           // onToken
           (token, isReasoning) => {
             resetTimeout();
+            // Never append internal reasoning / thinking tokens to candidate dialogue
+            if (isReasoning) {
+              options.onToken?.(token, isReasoning);
+              return;
+            }
             const currentMsg = useInterviewStore.getState().messages.find((m) => m.id === msgId);
-            const nextContent = (currentMsg?.content ?? "") + token;
+            const rawContent = (currentMsg?.content ?? "") + token;
+            const nextContent = cleanInterviewChatText(rawContent);
             useInterviewStore.getState().appendOrUpdateAssistantMessage(msgId, nextContent);
             options.onToken?.(token, isReasoning);
           },
@@ -262,7 +270,7 @@ export function useChatStream(options: UseChatStreamOptions) {
           async (fullText) => {
             clearTimeout(timeoutIdRef.current);
             const currentMsg = useInterviewStore.getState().messages.find((m) => m.id === msgId);
-            const textToUse = fullText || (currentMsg?.content ?? "");
+            const textToUse = cleanInterviewChatText(fullText || (currentMsg?.content ?? ""));
             
             useInterviewStore.getState().appendOrUpdateAssistantMessage(msgId, textToUse);
             const didPasteSuccessfully = textToUse.trim().length > 0;

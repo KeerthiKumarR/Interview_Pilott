@@ -11,6 +11,7 @@ import {
   buildDynamicToolInstructions,
 } from "@/types/skills";
 import { buildProfileInterviewDirective } from "@/lib/interview/profile-context";
+import { cleanInterviewChatText } from "@/lib/utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -99,6 +100,7 @@ export async function POST(req: Request, context: RouteContext) {
       currentQuestionTitle,
       currentQuestionPrompt,
       currentCategory,
+      spokenLanguage = "en-IN",
     } = body;
 
     if (!message || typeof message !== "string") {
@@ -215,6 +217,7 @@ export async function POST(req: Request, context: RouteContext) {
       currentQuestionTitle: typeof currentQuestionTitle === "string" ? currentQuestionTitle : undefined,
       currentQuestionPrompt: typeof currentQuestionPrompt === "string" ? currentQuestionPrompt : undefined,
       currentCategory: typeof currentCategory === "string" ? currentCategory : undefined,
+      spokenLanguage,
     });
 
     // Load candidate's career profile & projects to enable personalized interview questions (cached 60s)
@@ -235,8 +238,18 @@ export async function POST(req: Request, context: RouteContext) {
       profileSessionCache.set(interview.user.id, { profile: studentProfile, expiry: now + 60000 });
     }
 
+    // If the interview is for a specific job viva, anchor on the job's role rather than the student's default target role
+    let activeTargetRole = studentProfile?.targetRole || "Software Engineer";
+    if (interview.problemTitle) {
+      if (interview.problemTitle.includes("Technical Viva:")) {
+        activeTargetRole = interview.problemTitle.split("Technical Viva:")[1]?.trim() || activeTargetRole;
+      } else if (interview.problemTitle.includes(":")) {
+        activeTargetRole = interview.problemTitle.split(":")[1]?.trim() || activeTargetRole;
+      }
+    }
+
     const profileDirective = buildProfileInterviewDirective(studentProfile ? {
-      targetRole: studentProfile.targetRole,
+      targetRole: activeTargetRole,
       skills: Array.isArray(studentProfile.skills) ? (studentProfile.skills as string[]) : [],
       projects: studentProfile.projects,
       achievements: studentProfile.achievements,
@@ -304,12 +317,8 @@ export async function POST(req: Request, context: RouteContext) {
         maxTokens: 2560,
         onComplete: async (result) => {
           try {
-            // Clean tool call markup and internal stage tags for persistent chat transcript
-            const cleanContent = result.content
-              .replace(/\[TOOL_CALL:[\s\S]*?\]/gi, "")
-              .replace(/\[STAGE:\s*[1-4]\]/gi, "")
-              .replace(/\[SWITCH_CATEGORY:.*?\]/gi, "")
-              .trim();
+            // Clean internal reasoning, tokens, credits chatter, and control tags for persistent chat transcript
+            const cleanContent = cleanInterviewChatText(result.content);
 
             await prisma.message.create({
               data: {

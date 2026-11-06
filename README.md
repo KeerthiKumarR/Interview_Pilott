@@ -14,7 +14,7 @@
 
 **Powered by Gnani.ai Foundation Voice Models (Prisma ASR & Timbre TTS)**
 
-[🌐 Live Demo](https://interview-pilot-delta-sage.vercel.app) • [📖 Architecture](#-system-architecture) • [✨ Key Features](#-key-features) • [🛠️ Tech Stack](#-tech-stack) • [🚀 Quick Start](#-local-development-setup)
+[📖 Architecture](#-system-architecture) • [✨ Key Features](#-key-features) • [🛠️ Tech Stack](#-tech-stack) • [🚀 Quick Start](#-local-development-setup)
 
 </div>
 
@@ -44,25 +44,33 @@ Engineering graduates and college students face significant hurdles transitionin
 
 ### 2. 🎙️ Accent-Aware Indic Voice Engine (Powered by Gnani.ai)
 - **Gnani.ai Prisma ASR Integration**:
-  - Purpose-built for Indian engineering students: effortlessly handles regional English accents, cadences, and Hinglish technical terminology without dropping technical vocabulary.
-  - Sub-100ms ultra-low transcription latency.
+  - Purpose-built for Indian engineering students: effortlessly transcribes regional accents, cadences, and Hinglish technical terminology without dropping engineering identifiers.
+  - Native support for 9 regional languages: **Hindi (हिंदी)**, **Kannada (ಕನ್ನಡ)**, **Tamil (தமிழ்)**, **Telugu (తెలుగు)**, **Marathi (मराठी)**, **Bengali (বাংলা)**, **Gujarati (ગુજરાતી)**, **Malayalam (മലയാളം)**, and **English (India)**.
 - **Gnani.ai Timbre TTS Synthesis**:
-  - High-fidelity Indic conversational voices (`Nalini`, `Arun`) delivering natural human-like cadence, pauses, and interview question pacing.
-  - Server-side LRU audio caching with immutable headers for instant playback.
-- **4-Stage Dynamic Interview Pipeline**:
-  1. **Stage 1 — Introduction & Background**: Icebreaker exploring background and target specialization.
-  2. **Stage 2 — Technical Architecture & Resume Probing**: Dynamically generates challenging deep-dive questions based on the candidate's exact resume projects and claimed libraries.
-  3. **Stage 3 — Live Coding & Algorithmic Problem Solving**: In-browser Monaco code editor with live test-case validation across C++, Java, Python, JavaScript, TypeScript, and Go.
-  4. **Stage 4 — Behavioral & Situational**: Structured scenario questions evaluating teamwork, ownership, and conflict resolution using the STAR method.
-- **Fail-Safe Triple-Tier Fallback**:
-  - Primary: **Gnani.ai Prisma & Timbre**
-  - Secondary Cloud Fallback: Groq Whisper & OpenAI TTS
-  - Edge Local Fallback: Browser Native Web Speech API ($0 cost, 0ms latency) ensuring zero interruption during interviews.
+  - High-fidelity Indic conversational personas delivering natural human-like cadence, warm pauses, and interview question pacing:
+    - **Nalini** (`gnani_nalini`): Professional Clear Female (Default)
+    - **Pooja** (`gnani_pooja`): Conversational Warm Female
+    - **Arun** (`gnani_arun`): Technical Lead Male
+    - **Ramesh** (`gnani_ramesh`): Senior Architect Male
+  - Real-time Indic script auto-detection (Devanagari, Kannada, Tamil, etc.) for native pronunciation.
+  - Server-side LRU audio caching with immutable headers for instant sub-millisecond playback.
+- **Dynamic Spoken Viva Pipeline**:
+  - Preserves core technical terminology (API, Docker, Redis, Schema, Latency, Big-O) in English while conducting conversational dialogue in the candidate's chosen regional language.
+  - Acoustic Voice Orb with live soundwave reactivity, barge-in support, and real-time candidate speech transcript pills.
+- **4-Stage Structured Placement Viva**:
+  1. **Stage 1 — Introduction & Role Fit**: Warm icebreaker exploring technical journey and specialization.
+  2. **Stage 2 — Project Deep-Dive & Architecture Defense**: Probes technical decisions, state management, and deployment choices from candidate's exact portfolio projects.
+  3. **Stage 3 — Technical Trade-offs & Code Scratchpad**: Socratic technical discussion with live Monaco editor scratchpad.
+  4. **Stage 4 — Behavioral Ownership & Summary**: Situational questions evaluating collaboration, production incidents, and culture fit.
 
-### 3. 👁️ TensorFlow.js Anti-Cheat & Vision Proctoring
+### 3. 👁️ Anti-Cheat Proctoring & Hardware-Safe Camera Lifecycle
+- **Hardware-Accurate Camera Lifecycle**:
+  - Toggling camera to mute explicitly terminates all physical `MediaStreamTrack`s (`track.stop()`), ensuring the **macOS green camera hardware indicator turns off immediately**.
 - **Client-Side Computer Vision**: Uses `@tensorflow/tfjs` and the lightweight `BlazeFace` model running 100% on the client's GPU.
 - **Continuous Integrity Tracking**:
-  - Flags candidate absence / out-of-frame occurrences.
+  - Flags candidate absence / out-of-frame occurrences with exact accumulated duration.
+  - Detects multiple faces in the camera viewport.
+  - Monitors and logs unauthorized browser tab switching during coding rounds.
   - Detects multiple faces in the camera viewport.
   - Monitors and logs unauthorized browser tab switching during coding rounds.
 - **Integrity Log**: Transparently recorded in candidate reports and the administrative dashboard.
@@ -89,10 +97,26 @@ $$\text{Readiness Score} = 0.25(R) + 0.25(P) + 0.20(I) + 0.10(G) + 0.10(L) + 0.0
 - **Detailed Transcripts with Timestamps**: Line-by-line review showing the AI's question, candidate's spoken transcript, model answers, and constructive critique.
 - **Personalized Action Roadmap**: Top 5 highest-ROI fixes to boost readiness score before real campus placement drives.
 
-### 6. 💼 Placement & Opportunity Matcher
-- Direct job portal connecting candidates to targeted internship and full-time engineering openings.
-- Filters openings based on required skills and candidate readiness score thresholds.
-- Application pipeline tracking: *Saved* $\rightarrow$ *Applied* $\rightarrow$ *Shortlisted* $\rightarrow$ *Interview* $\rightarrow$ *Offer*.
+### 6. 💼 Multi-Dimensional Job Matching & Market Ingestion Pipeline
+- **Real-Time Tech Market Ingestion**:
+  - Live ingestion and caching of active software engineering opportunities across remote and tech ecosystems (via Remotive and Arbeitnow APIs) combined with institutional campus partner drives.
+- **4-Dimensional Profile Alignment Engine**:
+  - Mathematically scores candidate fit against market openings across 4 weighted pillars:
+    - 🎯 **Skill Alignment (35%)**: Direct overlap between verified student skills and job requirements.
+    - 🎙️ **Placement Viva Verification (35%)**: Validated technical depth, system design, and communication scored during live mock interviews.
+    - 💻 **Portfolio & Projects (15%)**: Production readiness, deployed applications, and GitHub repository complexity.
+    - 📄 **Resume ATS Track (15%)**: Target engineering track, domain experience, and ATS keyword relevance.
+- **Granular Match Breakdown & Actionable Guidance**:
+  - Interactive profile drawer revealing dimension-by-dimension percentage metrics (Skill Overlap, Viva Readiness, Project Alignment, Resume Fit).
+  - Concrete *"Why You Match"* synthesis and targeted *"Technical Round Advice"* highlighting high-yield prep topics before interviewing with the employer.
+- **Automated Recruiter-Grade Boolean Search Queries**:
+  - Dynamically synthesizes Boolean search strings targeting hidden intern and entry-level positions:
+    `("React" OR "TypeScript" OR "Node.js") AND ("Software Engineer") AND ("internship" OR "entry level" OR "fresher") AND ("Bangalore" OR "remote")`
+  - 1-click launch shortcuts into **LinkedIn Jobs**, **Wellfound (AngelList)**, **Internshala**, and **Google Jobs**.
+- **Role-Specific Viva Simulation**:
+  - One-click trigger from any job listing to launch a dedicated 15–20 minute technical placement viva focused specifically on that company's required tech stack.
+- **Integrated Application Lifecycle Tracker**:
+  - Persists student status transitions across *Not Applied* $\rightarrow$ *Saved* $\rightarrow$ *Applied* $\rightarrow$ *Interview Scheduled* $\rightarrow$ *Offer Received* $\rightarrow$ *Archived*.
 
 ### 7. 🛡️ Institutional & Placement Cell Administration Suite
 - **Student Roster & Cohort Analytics**: Real-time overview of college placement readiness across departments.
@@ -114,7 +138,7 @@ flowchart TD
         C --> F[Hybrid STT: Cloud + Web Speech]
     end
 
-    subgraph EdgeMiddleware["Edge Proxy & Auth (Vercel)"]
+    subgraph EdgeMiddleware["Edge Proxy & Auth"]
         B & C --> G[Next.js 16 Proxy Router]
         G <--> H[Clerk Production Auth + Google OAuth 2.0]
     end
@@ -123,7 +147,7 @@ flowchart TD
         G --> I[Resume Parser: pdfjs-dist + mammoth]
         I --> J[AI Resume Extractor]
         G --> K[Interview Session Engine]
-        K --> L[Multi-LLM Router: Groq / DeepSeek / OpenRouter]
+        K --> L[Multi-LLM Router: DeepSeek / Groq]
         K --> GN_STT["🎙️ Gnani.ai Prisma ASR v2.5 (STT)"]
         K --> GN_TTS["🔊 Gnani.ai Timbre v2.5 (TTS)"]
         G --> M[Code Runner: JDoodle / Judge0 API]
@@ -136,7 +160,7 @@ flowchart TD
 
     subgraph Output["Candidate Delivery"]
         N --> P[Placement Readiness Scorecard & Report]
-        P --> Q[Targeted Campus Job Opportunities]
+        P --> Q[4-D Job Matching & Market Ingestion Pipeline]
     end
 ```
 
@@ -205,12 +229,12 @@ sequenceDiagram
 | **Authentication** | **Clerk Authentication (Production)** | Secure Google OAuth 2.0 via Google Cloud Platform + email auth |
 | **Database** | **PostgreSQL (Supabase)** | Relational storage with connection pooling and SSL encryption |
 | **ORM** | **Prisma ORM 6.19.3** | Type-safe schema models, relations, migrations, and queries |
-| **AI Inference** | **Groq + DeepSeek + OpenRouter** | Ultra-low latency Llama-3/Qwen LLMs with multi-provider failover |
+| **AI Inference** | **DeepSeek + Groq** | Ultra-low latency LLMs for adaptive placement viva questioning and candidate evaluation |
 | **Document Parsers** | **`pdfjs-dist` + `mammoth`** | Safe in-memory parsing of `.pdf` and `.docx` resumes |
-| **Speech Engine** | **Web Speech API + Cloud Whisper** | Real-time dual-mode speech synthesis (TTS) & transcription (STT) |
+| **Voice Engine** | **Gnani.ai (Prisma ASR v2.5 & Timbre TTS v2.5)** | Indic regional accent recognition (STT) and conversational speech synthesis (TTS) across 9 regional languages |
 | **Anti-Cheat Vision** | **TensorFlow.js + BlazeFace** | In-browser client-side face presence and multi-face detection |
 | **Code Execution** | **Monaco Editor + JDoodle / Judge0** | In-browser code editing and multi-language compilation sandboxes |
-| **Hosting & CI/CD** | **Vercel** | Global edge network with automatic preview and production deployments |
+| **Hosting & Deployment** | **Render** | Cloud hosting with automated continuous deployment and environment parity |
 
 ---
 
@@ -299,10 +323,6 @@ npm run start
 Developed with passion by **Keerthi Kumar**.
 
 ---
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
 
 <div align="center">
 <sub>Crafted with ❤️ by Keerthi Kumar • Empowering the next generation of software engineers.</sub>

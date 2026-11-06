@@ -76,10 +76,15 @@ export function CodingWorkspaceView({
     let techStack: string | null = null;
 
     if (problemTitle) {
-      if (problemTitle.includes(":")) {
+      if (problemTitle.includes("Technical Viva:")) {
+        const parts = problemTitle.split("Technical Viva:");
+        const company = parts[0]?.trim() || "";
+        roleName = parts[1]?.trim() || "Software Engineer";
+        projectTitle = company ? `${roleName} (${company})` : roleName;
+      } else if (problemTitle.includes(":")) {
         const parts = problemTitle.split(":");
-        roleName = parts[0].replace(/Placement Viva/i, "").trim() || "Software Engineer";
-        projectTitle = parts[1].trim();
+        roleName = parts[1]?.trim() || parts[0].replace(/Placement Viva/i, "").trim() || "Software Engineer";
+        projectTitle = parts[1]?.trim() || null;
       } else {
         roleName = problemTitle.replace(/Placement Viva/i, "").trim() || "Software Engineer";
       }

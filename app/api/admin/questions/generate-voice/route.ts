@@ -38,10 +38,9 @@ export async function POST(req: Request) {
     if (gnaniApiKey) {
       try {
         let gnaniVoice = "Nalini";
-        if (voice === "gnani_arun" || voice === "arun") gnaniVoice = "Arun";
+        if (voice === "gnani_arun" || voice === "arun" || voice?.includes("male") || voice?.includes("ramesh")) gnaniVoice = "Deepak";
         else if (voice === "gnani_pooja" || voice === "pooja") gnaniVoice = "Pooja";
-        else if (voice === "gnani_ramesh" || voice === "ramesh") gnaniVoice = "Ramesh";
-        else if (voice?.includes("male")) gnaniVoice = "Arun";
+        else gnaniVoice = "Nalini";
 
         const gnaniModel = process.env.GNANI_TIMBRE_MODEL || "timbre-v2.5";
         const gnaniRes = await fetch("https://api.vachana.ai/api/v1/tts/inference", {
@@ -49,6 +48,7 @@ export async function POST(req: Request) {
           headers: {
             "Content-Type": "application/json",
             "X-API-Key-ID": gnaniApiKey,
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)",
           },
           body: JSON.stringify({
             text: cleanText,

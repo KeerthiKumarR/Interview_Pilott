@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import {
   Sparkles,
   Save,
@@ -87,6 +88,7 @@ interface ReadinessScoreData {
 }
 
 function ProfileIntakeMain() {
+  const { user } = useUser();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState<"profile" | "review">(
@@ -590,17 +592,18 @@ function ProfileIntakeMain() {
         <div className="space-y-6">
           {/* Main Title & Pitch */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                  Profile & Placement Review Hub
-                </h1>
-                <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                  <Sparkles className="size-3" />
-                  Smart Candidate Intake
-                </span>
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 rounded-full border-2 border-border bg-card px-3 py-0.5 text-xs font-black text-foreground shadow-xs">
+                <span className="size-2 rounded-full bg-[#4285F4] animate-ping" />
+                <span>Profile Calibration &amp; Benchmark Audit</span>
               </div>
-              <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
+                Profile &amp;{" "}
+                <span className="inline-block bg-[#4285F4] text-white px-3 py-0.5 rounded-xl border-2 border-black dark:border-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,0.7)] rotate-[-1deg] mx-1">
+                  Review
+                </span>
+              </h1>
+              <p className="text-sm text-muted-foreground font-medium max-w-xl">
                 Set up your resume and GitHub handles once. The benchmark engine automatically audits your ATS compatibility, codebase hygiene, and tailored questions.
               </p>
             </div>
@@ -611,10 +614,10 @@ function ProfileIntakeMain() {
                 variant={showChatAssistant ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowChatAssistant(!showChatAssistant)}
-                className="gap-1.5 shrink-0"
+                className="gap-1.5 shrink-0 rounded-xl border-2 border-border font-black text-xs neo-shadow-sm"
               >
                 <Bot className="size-3.5" />
-                {showChatAssistant ? "Hide Assistant" : "Chat Assistant"}
+                {showChatAssistant ? "Hide Assistant" : "Talk to AI Assistant"}
               </Button>
             ) : (
               <Button
@@ -622,7 +625,7 @@ function ProfileIntakeMain() {
                 onClick={handleRunFullReview}
                 disabled={isRunningReview}
                 size="sm"
-                className="gap-2 shrink-0 cursor-pointer"
+                className="gap-2 shrink-0 cursor-pointer rounded-xl border-2 border-primary font-black text-xs neo-shadow-sm"
               >
                 <RotateCw className={`size-3.5 ${isRunningReview ? "animate-spin" : ""}`} />
                 Re-run Benchmark
@@ -630,34 +633,34 @@ function ProfileIntakeMain() {
             )}
           </div>
 
-          {/* Unified Tab Switcher */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl border border-border bg-card shadow-2xs">
+          {/* Unified Tab Switcher with Neo-Brutalist Frame */}
+          <div className="flex items-center gap-2 p-1.5 rounded-2xl border-2 border-border bg-card neo-shadow-sm">
             <button
               type="button"
               onClick={() => setActiveTab("profile")}
-              className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+              className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 activeTab === "profile"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  ? "bg-primary text-primary-foreground neo-shadow-sm border-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary font-bold"
               }`}
             >
-              <UserCheck className="size-3.5" />
-              <span>1. Profile & Resume</span>
+              <UserCheck className="size-4" />
+              <span>1. Candidate Profile &amp; Resume</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("review")}
-              className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+              className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 activeTab === "review"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  ? "bg-primary text-primary-foreground neo-shadow-sm border-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary font-bold"
               }`}
             >
-              <Sparkles className="size-3.5 text-amber-500" />
-              <span>2. Placement Review</span>
-              {readinessScore && (
-                <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold">
-                  {readinessScore.overallScore}/100
+              <FileCheck2 className="size-4" />
+              <span>2. Automated Benchmark Review</span>
+              {review && (
+                <span className="ml-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-black border border-emerald-500/30">
+                  {score}/100
                 </span>
               )}
             </button>
@@ -670,28 +673,33 @@ function ProfileIntakeMain() {
             <div className="space-y-6">
               {/* Profile & Benchmark Snapshot Card */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-primary uppercase tracking-wider">
-                      Placement Benchmark Status
-                    </span>
-                    {readinessScore ? (
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold ${getTierColor(
-                          readinessScore.tier
-                        )}`}
-                      >
-                        {readinessScore.overallScore}/100 · {readinessScore.tier}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground italic">Not evaluated yet</span>
-                    )}
+                <div className="flex items-center gap-3.5">
+                  <div className="size-10 rounded-xl border-2 border-border bg-primary/10 flex items-center justify-center text-primary neo-shadow-sm shrink-0">
+                    <UserCheck className="size-5" />
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {readinessScore
-                      ? "Your ATS benchmark and codebase audit are active. Any changes to your resume or skills will auto-refresh your review."
-                      : "Upload your resume and click Save to automatically generate your ATS score and code hygiene report."}
-                  </p>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-foreground">
+                        {user?.fullName || "Candidate"}
+                      </span>
+                      {readinessScore ? (
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold ${getTierColor(
+                            readinessScore.tier
+                          )}`}
+                        >
+                          {readinessScore.overallScore}/100 · {readinessScore.tier}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Not evaluated yet</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {readinessScore
+                        ? "Your ATS benchmark and codebase audit are active. Any changes to your resume or skills will auto-refresh your review."
+                        : "Upload your resume and click Save to automatically generate your ATS score and code hygiene report."}
+                    </p>
+                  </div>
                 </div>
                 <Button
                   type="button"
@@ -715,10 +723,10 @@ function ProfileIntakeMain() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <FileCheck2 className="size-4 text-primary" />
-                    1. Resume Upload
+                    1. Resume Intake & Auto-Parser
                   </CardTitle>
                   <CardDescription>
-                    Upload your resume to automatically populate your profile and check ATS formatting.
+                    Drop your PDF or DOCX resume for AI-powered data extraction and interview readiness.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -738,10 +746,10 @@ function ProfileIntakeMain() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <UserCheck className="size-4 text-primary" />
-                    2. Target Role & Profiles
+                    2. Target Role & Developer Profiles
                   </CardTitle>
                   <CardDescription>
-                    Specify your target role and links so your mock interviews match real company expectations.
+                    Provide your target role and handles so your mock interviews match real company expectations.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -762,7 +770,7 @@ function ProfileIntakeMain() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <ShieldCheck className="size-4 text-primary" />
-                    3. Technical Skills
+                    3. Technical Skills Cloud
                   </CardTitle>
                   <CardDescription>
                     Languages, frameworks, databases, and core concepts you want evaluated in interviews.
@@ -781,10 +789,10 @@ function ProfileIntakeMain() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">
-                    4. Featured Projects
+                    4. Highlighted Projects & Architectures
                   </CardTitle>
                   <CardDescription>
-                    These projects will be referenced during your technical interview.
+                    The AI interviewer will refer to these live during your technical mock interview.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

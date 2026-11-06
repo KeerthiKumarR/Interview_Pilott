@@ -222,8 +222,8 @@ OUTPUT FORMAT (respond ONLY with valid JSON, no markdown formatting, no code blo
   "codeQualityScore": <0-100>,
   "recruiterVerdict": "STRONG_HIRE" | "HIRE" | "LEANING_NO" | "NO_HIRE",
   "recruiterNotes": {
-    "executiveSummary": "2-3 sentence hiring verdict summary for HR and hiring directors",
-    "hiringRecommendation": "Concrete recommendation on role placement, seniority, or culture fit",
+    "executiveSummary": "2-3 sentence technical readiness summary for the student and mentor (constructive, highlighting key strengths and immediate focus areas)",
+    "hiringRecommendation": "Constructive leveling & placement recommendation, highlighting readiness status and specific advice to achieve target role",
     "keyQuotes": [
       {
         "topic": "Career Ambition & Vision",
@@ -348,7 +348,7 @@ Generate the evaluation report as raw JSON adhering strictly to the system promp
         problemSolvingScore: clamp(parsed.problemSolvingScore, 50),
         optimizationScore: clamp(parsed.optimizationScore, 50),
         codeQualityScore: clamp(parsed.codeQualityScore, 50),
-        recruiterVerdict: typeof parsed.recruiterVerdict === "string" ? parsed.recruiterVerdict : "HIRE",
+        recruiterVerdict: typeof parsed.recruiterVerdict === "string" ? parsed.recruiterVerdict : (clamp(parsed.overallScore, 50) >= 70 ? "HIRE" : clamp(parsed.overallScore, 50) >= 50 ? "LEANING_NO" : "NO_HIRE"),
         recruiterNotes: parsed.recruiterNotes && typeof parsed.recruiterNotes === "object" ? parsed.recruiterNotes : null,
         skillScores: parsed.skillScores && typeof parsed.skillScores === "object" ? parsed.skillScores : null,
         candidateRoadmap: Array.isArray(parsed.candidateRoadmap) ? parsed.candidateRoadmap : null,
@@ -424,7 +424,7 @@ Generate the evaluation report as raw JSON adhering strictly to the system promp
         problemSolvingScore: 50,
         optimizationScore: 50,
         codeQualityScore: 50,
-        recruiterVerdict: "HIRE",
+        recruiterVerdict: "NO_HIRE",
         recruiterNotes: null,
         skillScores: null,
         candidateRoadmap: null,
@@ -454,7 +454,7 @@ Generate the evaluation report as raw JSON adhering strictly to the system promp
       problemSolvingScore: reportData.problemSolvingScore,
       optimizationScore: reportData.optimizationScore,
       codeQualityScore: reportData.codeQualityScore,
-      recruiterVerdict: isDynamicMode ? reportData.recruiterVerdict : null,
+      recruiterVerdict: reportData.recruiterVerdict || (reportData.overallScore >= 70 ? "HIRE" : reportData.overallScore >= 50 ? "LEANING_NO" : "NO_HIRE"),
       recruiterNotes: isDynamicMode && reportData.recruiterNotes ? reportData.recruiterNotes : undefined,
       skillScores: isDynamicMode && reportData.skillScores ? reportData.skillScores : undefined,
       candidateRoadmap: isDynamicMode && reportData.candidateRoadmap ? reportData.candidateRoadmap : undefined,

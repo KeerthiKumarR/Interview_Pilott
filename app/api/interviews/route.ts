@@ -298,7 +298,29 @@ ${projectSections.length > 0 ? projectSections.join("\n") + "\n\n---\n" : ""}
       ].join("\n");
     }
 
-    // Create the interview record (do not attach legacy seed jobRoleId if personalized viva)
+    // Pre-create the personalized assistant opening greeting message so it is instantly available in 0ms
+    const roleName = studentProfile?.targetRole || (isBehavioral ? "HR & Behavioral Competency" : "Software Engineer");
+    const primaryProj = (projectId && studentProfile?.projects?.find((p) => p.id === projectId)) || studentProfile?.projects?.[0];
+    const firstProject = primaryProj?.title?.trim();
+    const topSkills = Array.isArray(studentProfile?.skills) && studentProfile.skills.length > 0
+      ? (studentProfile.skills as string[]).slice(0, 3).join(", ")
+      : "";
+
+    const skillsPhrase = topSkills ? ` in ${topSkills}` : "";
+    const projectPhrase = firstProject ? ` and your featured project "${firstProject}"` : "";
+
+    const voiceId = body.voiceId as string | undefined;
+    const isMale = voiceId
+      ? voiceId.includes("arun") || voiceId.includes("male") || voiceId.startsWith("am_")
+      : false;
+    const isPooja = voiceId?.includes("pooja");
+    const examinerName = isMale ? "Arun" : isPooja ? "Pooja" : "Nalini";
+
+    const openingMessageContent = isBehavioral
+      ? `Hi, I'm ${examinerName}, and I'll be leading your behavioral competency evaluation today. We'll be walking through real engineering situations using the STAR method. To get started, please introduce yourself and share a brief overview of your background.`
+      : `Hi, I'm ${examinerName}, and I'll be conducting your ${roleName} Placement Viva today. I've reviewed your background${skillsPhrase}${projectPhrase}. To kick things off with Stage 1, please introduce yourself and share what excites you about building scalable systems.`;
+
+    // Create the interview record with initial assistant greeting pre-seeded
     const interview = await prisma.interview.create({
       data: {
         userId: user.id,
@@ -311,6 +333,12 @@ ${projectSections.length > 0 ? projectSections.join("\n") + "\n\n---\n" : ""}
         problemTitle,
         problemDescription,
         code: starterCode,
+        messages: {
+          create: {
+            role: "assistant",
+            content: openingMessageContent,
+          },
+        },
       },
     });
 

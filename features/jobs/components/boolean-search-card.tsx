@@ -6,7 +6,7 @@ import {
   Copy,
   Check,
   ExternalLink,
-  Sparkles,
+  Target,
   Globe,
   Briefcase,
 } from "lucide-react";
@@ -74,7 +74,7 @@ export function BooleanSearchCard({
               <h2 className="text-base font-semibold tracking-tight flex items-center gap-2">
                 Automated Boolean Job Search Query
                 <span className="inline-flex items-center gap-1 text-[11px] font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                  <Sparkles className="h-3 w-3 text-primary" />
+                  <Target className="h-3 w-3 text-primary" />
                   Tailored for {targetRole}
                 </span>
               </h2>

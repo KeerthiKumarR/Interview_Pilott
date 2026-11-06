@@ -95,6 +95,7 @@ interface InterviewState {
   // Voice
   isMicMuted: boolean;
   isSpeakerMuted: boolean;
+  isCameraOff: boolean;
   selectedVoiceId: string | null;
   sttLanguage: string;
   voiceInputMode: "auto" | "manual";
@@ -163,6 +164,8 @@ interface InterviewState {
   setTimerActive: (active: boolean) => void;
   toggleMic: () => void;
   toggleSpeaker: () => void;
+  toggleCamera: () => void;
+  setIsCameraOff: (isCameraOff: boolean) => void;
   setSelectedVoiceId: (id: string | null) => void;
   setSttLanguage: (lang: string) => void;
   setVoiceInputMode: (mode: "auto" | "manual") => void;
@@ -198,6 +201,7 @@ const initialState = {
   messages: [] as TranscriptMessage[],
   isMicMuted: false,
   isSpeakerMuted: false,
+  isCameraOff: false,
   selectedVoiceId: "gnani_nalini" as string | null,
   sttLanguage: (typeof window !== "undefined" && localStorage.getItem("interview_pilot_stt_lang")) || "en-IN",
   voiceInputMode: "manual" as const,
@@ -310,6 +314,10 @@ export const useInterviewStore = create<InterviewState>((set, get) => ({
 
   toggleSpeaker: () =>
     set((state) => ({ isSpeakerMuted: !state.isSpeakerMuted })),
+
+  toggleCamera: () => set((state) => ({ isCameraOff: !state.isCameraOff })),
+
+  setIsCameraOff: (isCameraOff) => set({ isCameraOff }),
 
   setSelectedVoiceId: (selectedVoiceId) => set({ selectedVoiceId }),
 

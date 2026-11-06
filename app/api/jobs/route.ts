@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 import { buildBooleanSearchQuery } from "@/lib/jobs/boolean-search";
-import { calculateJobMatch } from "@/lib/jobs/matcher";
+import { calculateJobMatch, formatVerdictLabel } from "@/lib/jobs/matcher";
+import { matchLiveOnlineJobs } from "@/services/live-jobs-service";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/jobs
- * Retrieves jobs ranked by match with student's profile,
- * pinning internal campus placement drives at the top.
+ * Retrieves real-time live tech jobs aggregated from online hiring feeds,
+ * matched dynamically against candidate's verified resume and viva interview scores.
  */
 export async function GET() {
   try {
@@ -18,92 +19,90 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 1. Fetch student profile and readiness score
-    const profile = await prisma.studentProfile.findUnique({
-      where: { userId: user.id },
-      include: {
-        readinessScore: true,
-        projects: { orderBy: { order: "asc" } },
-        achievements: true,
-      },
-    });
+    // 1. Fetch student profile, readiness score, projects, and completed interviews
+    const [profile, userInterviews] = await Promise.all([
+      prisma.studentProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          readinessScore: true,
+          projects: { orderBy: { order: "asc" } },
+        },
+      }),
+      prisma.interview.findMany({
+        where: { userId: user.id, report: { isNot: null } },
+        include: { report: true, jobRole: true },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+    ]);
 
     const studentSkills = Array.isArray(profile?.skills)
       ? (profile.skills as string[])
       : [];
     const targetRole = profile?.targetRole || "Software Engineer";
-    let readinessScore = profile?.readinessScore?.overallScore || 0;
+    const profileReadiness = profile?.readinessScore?.overallScore || 0;
 
-    // Dynamically calculate readiness if not yet evaluated or zero
-    if ((!profile?.readinessScore || readinessScore === 0) && profile) {
-      const latestInterview = await prisma.interview.findFirst({
-        where: { userId: user.id, report: { isNot: null } },
-        orderBy: { createdAt: "desc" },
-        include: { report: { select: { overallScore: true } } },
-      });
-      const interviewScore = latestInterview?.report?.overallScore || 0;
-      const resumeScore = profile.resumeText ? (profile.resumePageCount === 1 ? 75 : 55) : 0;
-      const projectList = profile.projects || [];
-      const withLiveUrl = projectList.filter((p) => p.liveUrl && p.liveUrl.startsWith("http"));
-      const withRepoUrl = projectList.filter((p) => p.repoUrl && p.repoUrl.startsWith("http"));
-      const projectsScore = projectList.length > 0
-        ? Math.min(100, projectList.length * 25 + withLiveUrl.length * 25 + withRepoUrl.length * 15)
-        : 0;
-      const githubScore = profile.githubUsername ? 65 : 0;
-      const leetcodeScore = profile.leetcodeUsername ? 70 : 0;
-      const linkedinScore = profile.linkedinUrl ? 75 : 0;
-      const achievementsScore = Math.min(100, (profile.achievements?.length || 0) * 35);
-
-      const computed = Math.round(
-        resumeScore * 0.25 +
-        projectsScore * 0.25 +
-        interviewScore * 0.20 +
-        githubScore * 0.10 +
-        leetcodeScore * 0.10 +
-        linkedinScore * 0.05 +
-        achievementsScore * 0.05
-      );
-
-      if (computed > 0) {
-        readinessScore = computed;
-        const tier = readinessScore >= 75 ? "Placement ready" : readinessScore >= 50 ? "Almost ready" : "Not ready";
-        prisma.readinessScore.upsert({
-          where: { profileId: profile.id },
-          update: { overallScore: readinessScore, tier, resumeScore, projectsScore, interviewScore, githubScore, leetcodeScore, linkedinScore, achievementsScore },
-          create: { profileId: profile.id, overallScore: readinessScore, tier, resumeScore, projectsScore, interviewScore, githubScore, leetcodeScore, linkedinScore, achievementsScore },
-        }).catch(() => {});
+    // Collect skills demonstrated during live viva / interviews
+    const interviewSkills: string[] = [];
+    let bestInterviewScore = 0;
+    userInterviews.forEach((i) => {
+      const score = i.report?.overallScore || 0;
+      if (score > bestInterviewScore) bestInterviewScore = score;
+      if (i.jobRole?.targetSkills) {
+        interviewSkills.push(
+          ...i.jobRole.targetSkills.split(",").map((s) => s.trim())
+        );
       }
-    }
+      if (i.report?.skillScores && typeof i.report.skillScores === "object") {
+        interviewSkills.push(...Object.keys(i.report.skillScores));
+      }
+    });
+
+    const latestInterview = userInterviews[0] || null;
+    const readinessScore = Math.max(profileReadiness, bestInterviewScore);
+    const combinedSkills = Array.from(new Set([...studentSkills, ...interviewSkills]));
 
     // 2. Generate Boolean search queries and external platform links
-    const booleanOutput = buildBooleanSearchQuery(studentSkills, targetRole);
+    const booleanOutput = buildBooleanSearchQuery(combinedSkills, targetRole);
 
-    // 3. Fetch active job postings from database
-    const rawJobs = await prisma.jobPosting.findMany({
-      orderBy: [
-        { isMSOTInternal: "desc" },
-        { createdAt: "desc" },
-      ],
-    });
+    // 3. Fetch active campus drives and live online web jobs concurrently
+    const [rawJobs, liveOnlineJobs, userApplications] = await Promise.all([
+      prisma.jobPosting.findMany({
+        orderBy: [
+          { isMSOTInternal: "desc" },
+          { createdAt: "desc" },
+        ],
+      }),
+      matchLiveOnlineJobs({
+        studentSkills,
+        interviewSkills,
+        candidateReadinessScore: readinessScore,
+        interviewScore: bestInterviewScore,
+        targetRole,
+        limit: 20,
+      }),
+      prisma.jobApplication.findMany({
+        where: { userId: user.id },
+      }),
+    ]);
 
-    // 4. Fetch student's existing applications
-    const userApplications = await prisma.jobApplication.findMany({
-      where: { userId: user.id },
-    });
     const appMap = new Map(userApplications.map((a) => [a.jobId, a]));
 
-    // 5. Score and rank jobs
-    const rankedJobs = rawJobs.map((job) => {
+    // 4. Score and rank internal DB jobs
+    const rankedDbJobs = rawJobs.map((job) => {
       const required = Array.isArray(job.requiredSkills)
         ? (job.requiredSkills as string[])
         : [];
-      const match = calculateJobMatch(
+      const match = calculateJobMatch({
         studentSkills,
-        required,
-        readinessScore,
-        job.minReadinessScore,
-        job.isMSOTInternal
-      );
+        interviewSkills,
+        candidateReadinessScore: readinessScore,
+        interviewScore: bestInterviewScore,
+        targetRole,
+        minReadinessScore: job.minReadinessScore,
+        isMSOTInternal: job.isMSOTInternal,
+        jobTitle: job.title,
+      });
       const userApp = appMap.get(job.id);
 
       return {
@@ -119,36 +118,81 @@ export async function GET() {
         minReadinessScore: job.minReadinessScore,
         isMSOTInternal: job.isMSOTInternal,
         stipendOrSalary: job.stipendOrSalary,
-        createdAt: job.createdAt,
-        // Match metrics
+        createdAt: job.createdAt.toISOString(),
         fitPercentage: match.fitPercentage,
         matchedSkills: match.matchedSkills,
         missingSkills: match.missingSkills,
         isEligible: match.isEligible,
         matchReason: match.matchReason,
-        // Current application status
         applicationStatus: userApp?.status || "None",
-        appliedAt: userApp?.appliedAt || null,
-        reminderDate: userApp?.reminderDate || null,
+        appliedAt: userApp?.appliedAt ? userApp.appliedAt.toISOString() : null,
+        reminderDate: userApp?.reminderDate ? userApp.reminderDate.toISOString() : null,
         notes: userApp?.notes || null,
       };
     });
 
-    // Sort: Exclusive campus drives first, then by fit percentage descending
-    rankedJobs.sort((a, b) => {
+    // Merge DB campus drives with live online tech jobs
+    const allRankedJobs = [
+      ...rankedDbJobs,
+      ...liveOnlineJobs.map((j) => {
+        const userApp = appMap.get(j.id);
+        return {
+          ...j,
+          createdAt: j.postedAt || new Date().toISOString(),
+          applicationStatus: userApp?.status || "None",
+          appliedAt: userApp?.appliedAt ? userApp.appliedAt.toISOString() : null,
+          reminderDate: userApp?.reminderDate ? userApp.reminderDate.toISOString() : null,
+          notes: userApp?.notes || null,
+        };
+      }),
+    ];
+
+    // Sort: Campus drives first, then by match fit percentage descending
+    allRankedJobs.sort((a, b) => {
       if (a.isMSOTInternal && !b.isMSOTInternal) return -1;
       if (!a.isMSOTInternal && b.isMSOTInternal) return 1;
       return b.fitPercentage - a.fitPercentage;
     });
 
+    const onlineJobsCount = allRankedJobs.filter((j) => !j.isMSOTInternal).length;
+    const campusJobsCount = allRankedJobs.filter((j) => j.isMSOTInternal).length;
+    const highMatchCount = allRankedJobs.filter((j) => j.fitPercentage >= 70).length;
+
     return NextResponse.json(
       {
+        candidateSummary: {
+          name: user.name,
+          email: user.email,
+          imageUrl: user.imageUrl,
+          targetRole,
+          skillsCount: combinedSkills.length,
+          skills: combinedSkills.slice(0, 8),
+          projectsCount: profile?.projects?.length || 0,
+          hasResume: Boolean(profile?.resumeText),
+          readinessScore,
+          latestInterview: latestInterview && latestInterview.report
+            ? {
+                id: latestInterview.id,
+                overallScore: latestInterview.report.overallScore || 0,
+                technicalScore: latestInterview.report.technicalScore || latestInterview.report.overallScore || 0,
+                communicationScore: latestInterview.report.communicationScore || latestInterview.report.overallScore || 0,
+                problemSolvingScore: latestInterview.report.problemSolvingScore || latestInterview.report.overallScore || 0,
+                verdict: formatVerdictLabel(latestInterview.report.recruiterVerdict),
+              }
+            : null,
+        },
+        stats: {
+          totalJobs: allRankedJobs.length,
+          onlineJobsCount,
+          campusJobsCount,
+          highMatchCount,
+        },
         booleanQuery: booleanOutput.query,
         platformUrls: booleanOutput.externalPlatformUrls,
         studentTargetRole: targetRole,
         candidateReadinessScore: readinessScore,
-        totalJobs: rankedJobs.length,
-        jobs: rankedJobs,
+        totalJobs: allRankedJobs.length,
+        jobs: allRankedJobs,
       },
       {
         headers: {

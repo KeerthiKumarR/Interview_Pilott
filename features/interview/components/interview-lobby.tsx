@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Sparkles, Globe } from "lucide-react";
+import { Sparkles, Globe, ArrowRight } from "lucide-react";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
-import { getAvailableVoices, type VoiceOption } from "@/hooks/use-web-speech";
+import { getAvailableVoices, STT_LANGUAGES, type VoiceOption } from "@/hooks/use-web-speech";
 import { speakTestBackend } from "@/hooks/use-tts";
 import { readCache, writeCache } from "@/lib/client-cache";
 
@@ -77,8 +77,14 @@ function playSpeakerTestChime() {
 
 export function InterviewLobby({
   onReady,
+  problemTitle,
+  problemDescription,
+  jobRole,
 }: {
   onReady: (style: string) => void;
+  problemTitle?: string;
+  problemDescription?: string;
+  jobRole?: string;
 }) {
   const [micStatus, setMicStatus] = useState<"checking" | "ok" | "error">("checking");
   const [cameraStatus, setCameraStatus] = useState<"checking" | "ok" | "error">("checking");
@@ -89,6 +95,21 @@ export function InterviewLobby({
   const [interviewStyle, setInterviewStyle] = useState("Standard");
   const testAudioRef = useRef<HTMLAudioElement | null>(null);
   const camStreamRef = useRef<MediaStream | null>(null);
+
+  // Parse job-specific role & employer if this placement viva was launched for a matched job
+  let jobCompany = "";
+  let effectiveJobRole = jobRole || "";
+  if (!effectiveJobRole && problemTitle) {
+    if (problemTitle.includes("Technical Viva:")) {
+      const parts = problemTitle.split("Technical Viva:");
+      jobCompany = parts[0]?.trim() || "";
+      effectiveJobRole = parts[1]?.trim() || "";
+    } else if (problemTitle.includes(":")) {
+      const parts = problemTitle.split(":");
+      jobCompany = parts[0]?.trim() || "";
+      effectiveJobRole = parts[1]?.trim() || "";
+    }
+  }
 
   // Profile dossier state
   const [profile, setProfile] = useState<{
@@ -128,6 +149,8 @@ export function InterviewLobby({
   const interviewId = useInterviewStore((s) => s.interviewId);
   const selectedVoiceId = useInterviewStore((s) => s.selectedVoiceId);
   const setSelectedVoiceId = useInterviewStore((s) => s.setSelectedVoiceId);
+  const sttLanguage = useInterviewStore((s) => s.sttLanguage);
+  const setSttLanguage = useInterviewStore((s) => s.setSttLanguage);
   const isResuming = useInterviewStore((s) => s.status === "in_progress");
   const duration = useInterviewStore((s) => s.duration);
   const mounted = useRef(false);
@@ -256,6 +279,21 @@ export function InterviewLobby({
     };
   }, [isResuming]);
 
+  // Instant Launch on Enter Key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+        return;
+      }
+      if (e.key === "Enter" && !(mode === "voice" && micStatus === "error")) {
+        e.preventDefault();
+        onReady(interviewStyle);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onReady, interviewStyle, mode, micStatus]);
+
   // Clean up camera stream on unmount
   useEffect(() => {
     return () => {
@@ -383,11 +421,32 @@ export function InterviewLobby({
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4 sm:p-8">
       <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
-        <div className="border-b border-border bg-muted/30 p-6 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Pre-Interview Check</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Let&apos;s make sure your setup is ready before we start the timer.
-          </p>
+        {/* Top Header with Instant Enter Action (Zero scroll required) */}
+        <div className="border-b border-border bg-muted/30 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Pre-Interview Check</h1>
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-500">
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Setup
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Verify your setup and review the session outline before entering the room.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onReady(interviewStyle)}
+              disabled={mode === "voice" && micStatus === "error"}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-50 cursor-pointer w-full sm:w-auto"
+            >
+              <span>Enter Interview Room</span>
+              <ArrowRight className="size-4" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 sm:p-8">
@@ -500,6 +559,37 @@ export function InterviewLobby({
                       </div>
                     </div>
                   </div>
+
+                  {/* Regional Spoken Viva Language Selector */}
+                  <div className="flex items-center justify-between rounded-lg border border-border bg-background p-3">
+                    <div className="flex items-center gap-3 w-full">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
+                        <Globe className="size-4" />
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <p className="text-sm font-medium">Spoken Viva Language</p>
+                        <select 
+                          value={sttLanguage || "en-IN"}
+                          onChange={(e) => {
+                            const langCode = e.target.value;
+                            setSttLanguage(langCode);
+                            if (typeof window !== "undefined") {
+                              try {
+                                localStorage.setItem("interview_pilot_stt_lang", langCode);
+                              } catch {}
+                            }
+                          }}
+                          className="mt-1 block w-full rounded-md border-0 py-1 pl-2 pr-8 text-[11px] text-muted-foreground bg-secondary focus:ring-1 focus:ring-primary outline-none cursor-pointer truncate"
+                        >
+                          {STT_LANGUAGES.map((lang) => (
+                            <option key={lang.code} value={lang.code}>
+                              {lang.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -550,11 +640,16 @@ export function InterviewLobby({
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded-lg bg-background/80 border border-border/50 p-2">
                       <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
-                        Target Role
+                        {jobCompany ? "Target Role Focus" : "Target Role"}
                       </span>
-                      <span className="font-semibold text-foreground truncate block mt-0.5">
-                        {profile?.targetRole || "Software Engineer"}
+                      <span className="font-semibold text-foreground truncate block mt-0.5" title={effectiveJobRole || profile?.targetRole || "Software Engineer"}>
+                        {effectiveJobRole || profile?.targetRole || "Software Engineer"}
                       </span>
+                      {jobCompany && (
+                        <span className="text-[10px] text-primary truncate block font-medium mt-0.5">
+                          {jobCompany}
+                        </span>
+                      )}
                     </div>
 
                     <div className="rounded-lg bg-background/80 border border-border/50 p-2">
@@ -653,16 +748,19 @@ export function InterviewLobby({
           </div>
         </div>
 
-        <div className="border-t border-border bg-muted/30 p-6 flex justify-between items-center">
-          <p className="text-xs text-muted-foreground">
-            Make sure you&apos;re in a quiet environment.
+        <div className="border-t border-border bg-muted/30 p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <p className="text-xs text-muted-foreground text-center sm:text-left">
+            Make sure you&apos;re in a quiet environment with a working microphone.
           </p>
           <button
+            type="button"
             onClick={() => onReady(interviewStyle)}
             disabled={mode === "voice" && micStatus === "error"}
-            className="rounded-md bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer w-full sm:w-auto"
           >
-            I&apos;m Ready, Start
+            <span>Enter Interview Room</span>
+            <span className="hidden sm:inline text-xs opacity-75 font-mono">(↵ Enter)</span>
+            <ArrowRight className="size-4" />
           </button>
         </div>
       </div>
