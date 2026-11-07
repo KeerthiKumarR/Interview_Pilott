@@ -6,6 +6,8 @@ import { getScoreColor } from "@/lib/utils";
 import { FeedbackButton } from "@/features/feedback/components/feedback-button";
 import { MessageContent } from "@/features/interview/components/message-content";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { stopAllTTSAudio } from "@/hooks/use-tts";
+import { stopSpeaking } from "@/hooks/use-web-speech";
 
 import {
   Award,
@@ -171,6 +173,12 @@ export function ReportClient({
   const [showCode, setShowCode] = useState(false);
 
   const generatingRef = useRef(false);
+
+  // Ensure all lingering audio, speech synthesis, and background timers are unconditionally silenced on mount
+  useEffect(() => {
+    stopAllTTSAudio();
+    stopSpeaking();
+  }, []);
 
   // Auto-generate report if not present
   useEffect(() => {

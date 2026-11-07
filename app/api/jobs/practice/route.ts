@@ -46,6 +46,12 @@ Speak naturally into your microphone when the interviewer introduces themselves.
 
     const starterCode = getVivaStarterCode(language, `${company} - ${jobTitle}`, "System Architecture", skillsStr);
 
+    const voiceId = (body.voiceId as string | undefined) || "gnani_nalini";
+    const isMale = voiceId.includes("arun") || voiceId.includes("male");
+    const examinerName = isMale ? "Arun" : "Nalini";
+
+    const openingMessage = `Hi! I'm ${examinerName}, and I'll be conducting your technical viva for the ${jobTitle} position at ${company} today. To kick things off with Stage 1, please introduce yourself and tell me what excites you about this role.`;
+
     const interview = await prisma.interview.create({
       data: {
         userId: user.id,
@@ -57,13 +63,19 @@ Speak naturally into your microphone when the interviewer introduces themselves.
         problemTitle,
         problemDescription,
         code: starterCode,
+        messages: {
+          create: {
+            role: "assistant",
+            content: openingMessage,
+          },
+        },
       },
     });
 
     return NextResponse.json({
       success: true,
       interviewId: interview.id,
-      url: `/interview/${interview.id}`,
+      url: `/interview/${interview.id}?voice=${encodeURIComponent(voiceId)}`,
     });
   } catch (err: any) {
     console.error("Error creating job practice interview:", err);
