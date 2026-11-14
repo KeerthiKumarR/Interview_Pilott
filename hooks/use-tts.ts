@@ -210,11 +210,20 @@ async function getOrFetchAudioUrl(
 
   if (!url) {
     try {
-      const res = await fetch(`/api/interviews/${interviewId}/tts`, {
+      let res = await fetch(`/api/interviews/${interviewId}/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: clean, voice: voiceId, language }),
       });
+
+      if ((res.status === 429 || res.status === 503) && (expectedSessionId === undefined || expectedSessionId === globalTtsSessionId)) {
+        await new Promise((r) => setTimeout(r, 300));
+        res = await fetch(`/api/interviews/${interviewId}/tts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: clean, voice: voiceId, language }),
+        });
+      }
 
       if (expectedSessionId !== undefined && expectedSessionId !== globalTtsSessionId) {
         return "";
@@ -284,6 +293,11 @@ export function resolveVoiceForText(rawVoiceId: string | null | undefined, text:
       useInterviewStore.getState().setSelectedVoiceId(femaleVoice);
     }
     return femaleVoice;
+  }
+  if (!selectedVoiceId && typeof window !== "undefined") {
+    try {
+      selectedVoiceId = localStorage.getItem("interview_pilot_voice_id") || "";
+    } catch {}
   }
   if (!selectedVoiceId) {
     return "gnani_nalini";

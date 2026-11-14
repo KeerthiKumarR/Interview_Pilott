@@ -10,6 +10,33 @@ interface CachedAudioEntry {
 const ttsMemoryCache = new Map<string, CachedAudioEntry>();
 const MAX_SERVER_AUDIO_CACHE = 120;
 
+// ─── Gnani Active-Request Serializer Mutex ──────────────────────────────────
+// Gnani Vachana API strictly enforces: "Only 1 active request is allowed at a time."
+// Concurrent requests without serialization return 429 RATE_LIMITED, triggering client fallbacks.
+// This in-memory mutex queues all calls to api.vachana.ai sequentially and auto-retries on 429.
+let gnaniMutexChain: Promise<any> = Promise.resolve();
+
+async function callGnaniSerialized(
+  fn: () => Promise<Response>
+): Promise<Response> {
+  const executeWithRetry = async (): Promise<Response> => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fn();
+      if (res.status === 429) {
+        console.warn(`[Gnani Mutex] Received 429 concurrency limit, retrying in 300ms (attempt ${attempt + 1}/3)...`);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        continue;
+      }
+      return res;
+    }
+    return fn();
+  };
+
+  const nextPromise = gnaniMutexChain.then(executeWithRetry, executeWithRetry);
+  gnaniMutexChain = nextPromise.catch(() => {});
+  return nextPromise;
+}
+
 let cachedOpenRouterKey: string | null = process.env.OPENROUTER_API_KEY || null;
 let lastKeyFetchTime = 0;
 let cachedTtsModelSetting: string | null = null;
@@ -180,8 +207,8 @@ export async function POST(
     if (gnaniApiKey) {
       try {
         const candidateGnaniVoices = isMaleVoice
-          ? ["Deepak", "Gaurav", "Arun"]
-          : (voice === "gnani_pooja" || voice?.includes("pooja") ? ["Pooja"] : ["Nalini"]);
+          ? ["Deepak", "Gaurav", "Roopesh"]
+          : (voice === "gnani_pooja" || voice?.includes("pooja") ? ["Bhavna", "Nalini"] : ["Nalini", "Bhavna"]);
         // Only use Indic language code if the text actually contains Indic script!
         // If the text is in English (Latin alphabet), ALWAYS use "en-IN" so Nalini speaks in her natural Indian English voice.
         const hasIndicScript = /[\u0900-\u0D7F]/.test(text);
@@ -214,25 +241,27 @@ export async function POST(
             });
           }
 
-          const gnaniRes = await fetch("https://api.vachana.ai/api/v1/tts/inference", {
-            method: "POST",
-            signal: AbortSignal.timeout(15000),
-            headers: {
-              "Content-Type": "application/json",
-              "X-API-Key-ID": gnaniApiKey,
-              "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)",
-            },
-            body: JSON.stringify({
-              text,
-              voice: gnaniVoice,
-              model: gnaniModel,
-              language: targetLang,
-              speed: 1,
-              audio_config: {
-                container: "wav",
+          const gnaniRes = await callGnaniSerialized(() =>
+            fetch("https://api.vachana.ai/api/v1/tts/inference", {
+              method: "POST",
+              signal: AbortSignal.timeout(15000),
+              headers: {
+                "Content-Type": "application/json",
+                "X-API-Key-ID": gnaniApiKey,
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)",
               },
-            }),
-          });
+              body: JSON.stringify({
+                text,
+                voice: gnaniVoice,
+                model: gnaniModel,
+                language: targetLang,
+                speed: 1,
+                audio_config: {
+                  container: "wav",
+                },
+              }),
+            })
+          );
 
           if (gnaniRes.ok) {
             const arrayBuffer = await gnaniRes.arrayBuffer();
